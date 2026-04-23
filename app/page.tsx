@@ -18,6 +18,7 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { INITIAL_NODES, statusConfig } from "@/constants/mockdata";
+import { useMqtt } from "@/hooks/useMqtt";
 import { NodeData } from "@/lib/type";
 import { formatTimeAgo, formatTimestamp, generateHistory } from "@/lib/utils";
 import {
@@ -53,6 +54,11 @@ import {
 } from "recharts";
 
 export default function Dashboard() {
+  // MQTT data --------------------------------------------------------
+  const data = useMqtt();
+
+  console.log({ data });
+
   const [nodes, setNodes] = useState<NodeData[]>(INITIAL_NODES);
   const [loading, setLoading] = useState(true);
   const [selectedNode, setSelectedNode] = useState<string>("ST-001");
