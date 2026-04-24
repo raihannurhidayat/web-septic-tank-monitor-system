@@ -16,16 +16,21 @@ export const generateHistory = (base: number, points = 24, spread = 8) =>
 // ─── Helper Functions ─────────────────────────────────────────────────────────
 
 export const formatTimeAgo = (date: Date) => {
-  const secs = Math.floor((Date.now() - date.getTime()) / 1000);
-  if (secs < 60) return `${secs}d yang lalu`;
-  const mins = Math.floor(secs / 60);
-  if (mins < 60) return `${mins}m yang lalu`;
-  return `${Math.floor(mins / 60)}j yang lalu`;
+  if (date) {
+    const secs = Math.floor((Date.now() - date.getTime()) / 1000);
+    if (secs < 60) return `${secs}d yang lalu`;
+    const mins = Math.floor(secs / 60);
+    if (mins < 60) return `${mins}m yang lalu`;
+    return `${Math.floor(mins / 60)}j yang lalu`;
+  }
 };
 
-export const formatTimestamp = (date: Date) =>
-  date.toLocaleTimeString("id-ID", {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
+export const formatTimestamp = (date: Date) => {
+  if (date) {
+    return date.toLocaleTimeString("id-ID", {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+  }
+};

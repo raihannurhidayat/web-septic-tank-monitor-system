@@ -1,5 +1,14 @@
 import { NodeData } from "@/lib/type";
 
+export const defaultStatusConfig = {
+  color: "text-emerald-400",
+  bg: "bg-emerald-500/10",
+  border: "border-emerald-500/30",
+  ring: "#10b981",
+  badge: "bg-emerald-500/20 text-emerald-300 border-emerald-500/40",
+  dot: "bg-emerald-400",
+};
+
 export const statusConfig = {
   Aman: {
     color: "text-emerald-400",

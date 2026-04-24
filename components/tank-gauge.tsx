@@ -33,7 +33,9 @@ export function TankGauge({
           }}
         />
       </div>
-      <span className={`text-xs font-bold font-mono ${cfg.color}`}>{pct}%</span>
+      <span className={`text-xs font-bold font-mono ${cfg.color}`}>
+        {pct.toFixed(2)}%
+      </span>
     </div>
   );
 }

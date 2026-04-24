@@ -2,6 +2,8 @@
 
 import { AlertItem } from "@/components/alert-item";
 import { GasBar } from "@/components/gas-bar";
+import HistoryChart from "@/components/history-chart";
+import LoadingSkeleton from "@/components/loading-skeleton";
 import { NodeCard } from "@/components/node-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,7 +19,11 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { INITIAL_NODES, statusConfig } from "@/constants/mockdata";
+import {
+  defaultStatusConfig,
+  INITIAL_NODES,
+  statusConfig,
+} from "@/constants/mockdata";
 import { useMqtt } from "@/hooks/useMqtt";
 import { NodeData } from "@/lib/type";
 import { formatTimeAgo, formatTimestamp, generateHistory } from "@/lib/utils";
@@ -55,11 +61,12 @@ import {
 
 export default function Dashboard() {
   // MQTT data --------------------------------------------------------
-  const data = useMqtt();
+  const { latestNode, nodes: mqttNodes } = useMqtt();
 
-  console.log({ data });
+  console.log({ mqttNodes });
 
-  const [nodes, setNodes] = useState<NodeData[]>(INITIAL_NODES);
+  const [nodes, setNodes] = useState<NodeData[]>([]);
+  // const [nodes, setNodes] = useState<NodeData[]>(INITIAL_NODES);
   const [loading, setLoading] = useState(true);
   const [selectedNode, setSelectedNode] = useState<string>("ST-001");
   const [lastRefresh, setLastRefresh] = useState(new Date());
@@ -68,15 +75,83 @@ export default function Dashboard() {
     alertId: string;
   } | null>(null);
   const [ackName, setAckName] = useState("Admin");
-  const [historyData] = useState(() => generateHistory(72, 24, 15));
-  const [gasHistoryH2S] = useState(() => generateHistory(3.2, 24, 2));
+  const [historyData, setHistoryData] = useState(() =>
+    generateHistory(72, 24, 15),
+  );
+  const [gasHistoryH2S, setGasHistoryH2S] = useState(() =>
+    generateHistory(3.2, 24, 2),
+  );
+  const [gasHistoryCH4, setGasHistoryCH4] = useState(() =>
+    generateHistory(800, 24, 300),
+  );
+  const [gasHistoryNH3, setGasHistoryNH3] = useState(() =>
+    generateHistory(25, 24, 10),
+  );
   const [refreshing, setRefreshing] = useState(false);
 
-  // Simulate initial load
   useEffect(() => {
-    const t = setTimeout(() => setLoading(false), 1400);
-    return () => clearTimeout(t);
-  }, []);
+    setNodes(mqttNodes as NodeData[]);
+  }, [mqttNodes]);
+
+  useEffect(() => {
+    setHistoryData((prev) =>
+      [
+        ...prev,
+        {
+          time: new Date().toLocaleTimeString("id-ID", {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+          value: latestNode?.level_pct ?? 0,
+        },
+      ].slice(-24),
+    );
+  }, [mqttNodes]);
+
+  useEffect(() => {
+    setGasHistoryH2S((prev) =>
+      [
+        ...prev,
+        {
+          time: new Date().toLocaleTimeString("id-ID", {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+          value: latestNode?.h2s_ppm ?? 0,
+        },
+      ].slice(-24),
+    );
+  }, [mqttNodes]);
+
+  useEffect(() => {
+    setGasHistoryCH4((prev) =>
+      [
+        ...prev,
+        {
+          time: new Date().toLocaleTimeString("id-ID", {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+          value: latestNode?.ch4_ppm ?? 0,
+        },
+      ].slice(-24),
+    );
+  }, [mqttNodes]);
+
+  useEffect(() => {
+    setGasHistoryNH3((prev) =>
+      [
+        ...prev,
+        {
+          time: new Date().toLocaleTimeString("id-ID", {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+          value: latestNode?.nh3_ppm ?? 0,
+        },
+      ].slice(-24),
+    );
+  }, [mqttNodes]);
 
   // Auto refresh every 30s
   useEffect(() => {
@@ -135,7 +210,9 @@ export default function Dashboard() {
   };
 
   const activeNode = nodes.find((n) => n.node_id === selectedNode) ?? nodes[0];
-  const cfg = statusConfig[activeNode.status];
+  const cfg = activeNode?.status
+    ? statusConfig[activeNode?.status]
+    : defaultStatusConfig;
 
   const totalAlerts = nodes.reduce(
     (acc, n) => acc + n.alerts.filter((a) => !a.acknowledged).length,
@@ -146,65 +223,8 @@ export default function Dashboard() {
   ).length;
   const onlineCount = nodes.filter((n) => n.online).length;
 
-  const summaryCards = [
-    {
-      label: "Total Node",
-      value: nodes.length,
-      sub: `${onlineCount} online`,
-      icon: Activity,
-      color: "text-cyan-400",
-      bg: "bg-cyan-500/10",
-    },
-    {
-      label: "Node Kritis",
-      value: criticalCount,
-      sub: "butuh perhatian",
-      icon: AlertTriangle,
-      color: "text-rose-400",
-      bg: "bg-rose-500/10",
-    },
-    {
-      label: "Alert Aktif",
-      value: totalAlerts,
-      sub: "belum diakui",
-      icon: Bell,
-      color: "text-amber-400",
-      bg: "bg-amber-500/10",
-    },
-    {
-      label: "Koneksi",
-      value: `${Math.round((onlineCount / nodes.length) * 100)}%`,
-      sub: `${onlineCount}/${nodes.length} node`,
-      icon: Wifi,
-      color: "text-emerald-400",
-      bg: "bg-emerald-500/10",
-    },
-  ];
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#080c14] p-6">
-        <div className="max-w-[1400px] mx-auto space-y-6">
-          <Skeleton className="h-16 w-72 bg-slate-800" />
-          <div className="grid grid-cols-4 gap-4">
-            {[...Array(4)].map((_, i) => (
-              <Skeleton key={i} className="h-24 bg-slate-800 rounded-xl" />
-            ))}
-          </div>
-          <div className="grid grid-cols-12 gap-4">
-            <div className="col-span-4 space-y-4">
-              {[...Array(4)].map((_, i) => (
-                <Skeleton key={i} className="h-48 bg-slate-800 rounded-xl" />
-              ))}
-            </div>
-            <div className="col-span-8 space-y-4">
-              <Skeleton className="h-64 bg-slate-800 rounded-xl" />
-              <Skeleton className="h-48 bg-slate-800 rounded-xl" />
-            </div>
-          </div>
-        </div>
-      </div>
-    );
+  if (!mqttNodes.length) {
+    return <LoadingSkeleton />;
   }
 
   return (
@@ -214,7 +234,7 @@ export default function Dashboard() {
         style={{ fontFamily: "'Space Mono', 'IBM Plex Mono', monospace" }}
       >
         {/* Subtle grid bg */}
-        <div
+        {/* <div
           className="fixed inset-0 pointer-events-none"
           style={{
             backgroundImage: `
@@ -223,7 +243,7 @@ export default function Dashboard() {
             `,
             backgroundSize: "40px 40px",
           }}
-        />
+        /> */}
 
         <div className="relative max-w-[1440px] mx-auto px-4 py-6 space-y-5">
           {/* ── Header ── */}
@@ -267,56 +287,18 @@ export default function Dashboard() {
             </div>
           </header>
 
-          {/* ── Summary Cards ── */}
-          {/* <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {summaryCards.map((c) => (
-              <Card
-                key={c.label}
-                className={`border-slate-800 bg-slate-900/60 backdrop-blur-sm ${c.bg}`}
-              >
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-[11px] text-slate-500 uppercase tracking-wider">
-                        {c.label}
-                      </p>
-                      <p
-                        className={`text-2xl font-bold font-mono ${c.color} mt-0.5`}
-                      >
-                        {c.value}
-                      </p>
-                      <p className="text-[11px] text-slate-500 mt-0.5">
-                        {c.sub}
-                      </p>
-                    </div>
-                    <c.icon className={`w-8 h-8 ${c.color} opacity-50`} />
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div> */}
+          {/* History Chart */}
+          {/* <HistoryChart /> */}
 
           {/* ── Main Content ── */}
           <div className="grid grid-cols-12 gap-4">
             {/* Left: Node List */}
             <div className="col-span-12 lg:col-span-4 space-y-3">
-              {/* <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest px-1">
-                Node List ({nodes.length})
-              </h2> */}
-              {/* {nodes.map((node) => (
-                <NodeCard
-                  key={node.node_id}
-                  node={node}
-                  onAck={handleAckRequest}
-                  selected={selectedNode === node.node_id}
-                  onSelect={setSelectedNode}
-                />
-              ))} */}
               <NodeCard
-                key={nodes[0].node_id}
+                key={nodes[0]?.node_id}
                 node={nodes[0]}
                 onAck={handleAckRequest}
-                selected={selectedNode === nodes[0].node_id}
+                selected={selectedNode === nodes[0]?.node_id}
                 onSelect={setSelectedNode}
               />
             </div>
@@ -332,14 +314,14 @@ export default function Dashboard() {
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="font-bold text-slate-100 text-lg font-mono">
-                          {activeNode.node_id}
+                          {activeNode?.node_id}
                         </span>
                         <Badge
                           className={`text-xs font-bold border px-2 ${cfg.badge}`}
                         >
-                          {activeNode.status}
+                          {activeNode?.status}
                         </Badge>
-                        {activeNode.online ? (
+                        {activeNode ? (
                           <span className="flex items-center gap-1 text-xs text-emerald-400">
                             <Wifi className="w-3.5 h-3.5" /> Online
                           </span>
@@ -350,16 +332,16 @@ export default function Dashboard() {
                         )}
                       </div>
                       <p className="text-sm text-slate-500 mt-0.5">
-                        {activeNode.location}
+                        {activeNode?.location}
                       </p>
                     </div>
                     <div className="text-right">
                       <p className="text-[11px] text-slate-500">Last Update</p>
                       <p className="text-xs font-mono text-slate-300">
-                        {formatTimestamp(activeNode.timestamp)}
+                        {formatTimestamp(lastRefresh)}
                       </p>
                       <p className="text-[11px] text-slate-500">
-                        {formatTimeAgo(activeNode.timestamp)}
+                        {formatTimeAgo(lastRefresh)}
                       </p>
                     </div>
                   </div>
@@ -384,7 +366,9 @@ export default function Dashboard() {
                         cy={65}
                         innerRadius={40}
                         outerRadius={60}
-                        data={[{ value: activeNode.level_pct, fill: cfg.ring }]}
+                        data={[
+                          { value: activeNode?.level_pct, fill: cfg.ring },
+                        ]}
                         startAngle={90}
                         endAngle={-270}
                       >
@@ -410,7 +394,7 @@ export default function Dashboard() {
                             fontFamily: "monospace",
                           }}
                         >
-                          {Math.round(activeNode.level_pct)}%
+                          {Math.round(activeNode?.level_pct)}%
                         </text>
                         <text
                           x={65}
@@ -429,7 +413,7 @@ export default function Dashboard() {
                           <p
                             className={`text-2xl font-bold font-mono ${cfg.color}`}
                           >
-                            {activeNode.level_cm}
+                            {activeNode?.level_cm}
                             <span className="text-sm text-slate-500 ml-1">
                               cm
                             </span>
@@ -441,7 +425,7 @@ export default function Dashboard() {
                           <Badge
                             className={`text-xs font-bold border mt-1 ${cfg.badge}`}
                           >
-                            {activeNode.status}
+                            {activeNode?.status}
                           </Badge>
                         </div>
                       </div>
@@ -459,24 +443,24 @@ export default function Dashboard() {
                   <CardContent className="px-4 pb-4 space-y-3">
                     <GasBar
                       label="H₂S (Hidrogen Sulfida)"
-                      value={activeNode.h2s_ppm}
-                      max={20}
+                      value={activeNode?.h2s_ppm}
+                      max={10}
                       threshold={10}
                       unit="ppm"
                       icon={Wind}
                     />
                     <GasBar
                       label="CH₄ (Metana)"
-                      value={activeNode.ch4_ppm}
-                      max={2000}
+                      value={activeNode?.ch4_ppm}
+                      max={1000}
                       threshold={1000}
                       unit="ppm"
                       icon={Wind}
                     />
                     <GasBar
                       label="NH₃ (Amonia)"
-                      value={activeNode.nh3_ppm}
-                      max={50}
+                      value={activeNode?.nh3_ppm}
+                      max={25}
                       threshold={25}
                       unit="ppm"
                       icon={Wind}
@@ -493,7 +477,7 @@ export default function Dashboard() {
                       Tren Level — 24 Jam Terakhir
                     </CardTitle>
                     <span className="text-[11px] text-slate-600 font-mono">
-                      {activeNode.node_id}
+                      {activeNode?.node_id}
                     </span>
                   </div>
                 </CardHeader>
@@ -575,28 +559,28 @@ export default function Dashboard() {
                         {
                           icon: Thermometer,
                           label: "Suhu",
-                          value: `${activeNode.temp_c}°C`,
+                          value: `${activeNode?.temp_c}°C`,
                           color: "text-orange-400",
                           sub: "DHT22",
                         },
                         {
                           icon: Droplets,
                           label: "Kelembaban",
-                          value: `${activeNode.humidity_pct}%`,
+                          value: `${activeNode?.humidity_pct}%`,
                           color: "text-blue-400",
                           sub: "RH",
                         },
                         {
                           icon: FlaskConical,
                           label: "pH",
-                          value: activeNode.ph.toFixed(2),
+                          value: activeNode?.ph.toFixed(2),
                           color: "text-violet-400",
                           sub: "0–14 skala",
                         },
                         {
                           icon: Eye,
                           label: "Turbiditas",
-                          value: `${activeNode.turbidity_ntu}`,
+                          value: `${activeNode?.turbidity_ntu}`,
                           color: "text-slate-300",
                           sub: "NTU",
                         },
@@ -620,6 +604,68 @@ export default function Dashboard() {
                         </div>
                       ))}
                     </div>
+                  </CardContent>
+                </Card>
+
+                {/* CH₄ Mini Chart */}
+                <Card className="border-slate-800 bg-slate-900/60 backdrop-blur-sm">
+                  <CardHeader className="pb-2 pt-4 px-4">
+                    <CardTitle className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+                      Tren CH₄ — 24 Jam
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="px-2 pb-4">
+                    <ResponsiveContainer width="100%" height={150}>
+                      <LineChart data={gasHistoryCH4}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                        <XAxis
+                          dataKey="time"
+                          tick={{ fill: "#475569", fontSize: 9 }}
+                          tickLine={false}
+                          axisLine={{ stroke: "#1e293b" }}
+                          interval={5}
+                        />
+                        <YAxis
+                          tick={{ fill: "#475569", fontSize: 9 }}
+                          tickLine={false}
+                          axisLine={false}
+                          width={28}
+                        />
+                        <RechartTooltip
+                          contentStyle={{
+                            background: "#0f172a",
+                            border: "1px solid #1e293b",
+                            borderRadius: 6,
+                            fontSize: 11,
+                          }}
+                          formatter={(v: any) => {
+                            const value = Number(v ?? 0);
+                            return [`${value.toFixed(2)} ppm`, "H₂S"];
+                          }}
+                        />
+                        {/* OSHA threshold line */}
+                        <Line
+                          type="monotone"
+                          dataKey={() => 1000}
+                          stroke="#f43f5e"
+                          strokeWidth={1}
+                          strokeDasharray="4 2"
+                          dot={false}
+                          name="OSHA Limit"
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="value"
+                          stroke="#06b6d4"
+                          strokeWidth={2}
+                          dot={false}
+                          activeDot={{ r: 3 }}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                    <p className="text-[10px] text-slate-600 text-center mt-1">
+                      — — Garis merah: OSHA limit (1000 ppm)
+                    </p>
                   </CardContent>
                 </Card>
 
@@ -681,6 +727,68 @@ export default function Dashboard() {
                     </ResponsiveContainer>
                     <p className="text-[10px] text-slate-600 text-center mt-1">
                       — — Garis merah: OSHA limit (10 ppm)
+                    </p>
+                  </CardContent>
+                </Card>
+
+                {/* NH₃ Mini Chart */}
+                <Card className="border-slate-800 bg-slate-900/60 backdrop-blur-sm">
+                  <CardHeader className="pb-2 pt-4 px-4">
+                    <CardTitle className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+                      Tren NH₃ — 24 Jam
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="px-2 pb-4">
+                    <ResponsiveContainer width="100%" height={150}>
+                      <LineChart data={gasHistoryNH3}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                        <XAxis
+                          dataKey="time"
+                          tick={{ fill: "#475569", fontSize: 9 }}
+                          tickLine={false}
+                          axisLine={{ stroke: "#1e293b" }}
+                          interval={5}
+                        />
+                        <YAxis
+                          tick={{ fill: "#475569", fontSize: 9 }}
+                          tickLine={false}
+                          axisLine={false}
+                          width={28}
+                        />
+                        <RechartTooltip
+                          contentStyle={{
+                            background: "#0f172a",
+                            border: "1px solid #1e293b",
+                            borderRadius: 6,
+                            fontSize: 11,
+                          }}
+                          formatter={(v: any) => {
+                            const value = Number(v ?? 0);
+                            return [`${value.toFixed(2)} ppm`, "NH₃"];
+                          }}
+                        />
+                        {/* OSHA threshold line */}
+                        <Line
+                          type="monotone"
+                          dataKey={() => 25}
+                          stroke="#f43f5e"
+                          strokeWidth={1}
+                          strokeDasharray="4 2"
+                          dot={false}
+                          name="OSHA Limit"
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="value"
+                          stroke="#06b6d4"
+                          strokeWidth={2}
+                          dot={false}
+                          activeDot={{ r: 3 }}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                    <p className="text-[10px] text-slate-600 text-center mt-1">
+                      — — Garis merah: OSHA limit (25 ppm)
                     </p>
                   </CardContent>
                 </Card>
